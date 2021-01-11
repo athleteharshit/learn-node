@@ -1,5 +1,5 @@
-import bodyParser = require('body-parser');
 import * as express from 'express';
+import * as bodyParser from 'body-parser';
 import * as mongoose from 'mongoose';
 import {getEnvironmentVaribles} from './environments/env';
 import UserRouter from './routers/UserRouter';

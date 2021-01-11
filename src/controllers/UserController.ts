@@ -1,32 +1,37 @@
 import User from "../models/User";
 import { NodeMailer } from "../utils/NodeMailer";
 import { Utils } from "../utils/Utils";
+import * as Jwt from 'jsonwebtoken';
+import { getEnvironmentVaribles } from "../environments/env";
 
 export class UserController {
-    static async signUp(req, res, next): Promise<void> {
-
+    static async signUp(req, res, next) {
         const username = req.body.username;
         const email = req.body.email;
         const password = req.body.password;
         
         const verificationToken  = Utils.generateVerificationToken();
-
-        const data = {
-            username,
-            email,
-            password,
-            verification_token: verificationToken,
-            verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME
-        }
-
         try {
+            const hash = await Utils.encryptPassword(password);
+
+            const data = {
+                username,
+                email,
+                password: hash,
+                verification_token: verificationToken,
+                verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME,
+                created_at: new Date(),
+                updated_at: new Date()
+            }
+
             let user = await new User(data).save();
             res.send(user);
-            await NodeMailer.sendEmail({to: ['hg94543@gmail.com'], subject: `email testing`, html: `<h1>${verificationToken}</h1>`})
+            await NodeMailer.sendEmail({to: ['hg94543@gmail.com'], subject: `email testing`, html: `<h1>${verificationToken}</h1>`});
         } catch (err) {
             next(err);
         }
     }
+
 
     static async verify(req, res, next) {
         const verificationToken = req.body.verification_token;
@@ -44,6 +49,7 @@ export class UserController {
             next(e);
         }
     }
+
 
     static async resendVerificationEmail(req, res, next) {
         const email = req.query.email;
@@ -65,6 +71,25 @@ export class UserController {
             }else {
                 throw new Error('User Does Not Exist')
             }
+        } catch (e) {
+            next(e);
+        }
+    }
+
+
+    static async login(req, res, next) {
+        const password = req.query.password;
+        const user = req.user;
+        
+        try {
+            await Utils.comparePassword({plainPassword: password, encryptedPassword: user.password});
+
+            const token = Jwt.sign({email: user.email, user_id: user._id}, getEnvironmentVaribles().jwt_secret, {expiresIn: '100d'});
+            const data = {
+                user: user,
+                token: token
+            }
+            res.json(data);
         } catch (e) {
             next(e);
         }

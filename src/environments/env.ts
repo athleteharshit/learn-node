@@ -2,7 +2,8 @@ import { DevlopmentEnvironment } from "./dev.env";
 import { ProductionEnvironment } from "./prod.env";
 
 export interface Environment {
-    db_url:string
+    db_url:string,
+    jwt_secret:string
 }
 
 export function getEnvironmentVaribles() {
