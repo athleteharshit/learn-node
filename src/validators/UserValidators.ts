@@ -15,7 +15,7 @@ export class UserValidators {
     }
 
     static verifyUser() {
-        return [body('verification_token', 'Verification Token is Required').isNumeric(), body('email', 'Email is Required').isEmail()]
+        return [body('verification_token', 'Verification Token is Required').isNumeric()]
     }
 
     static resendVerificationEmail() {
@@ -35,5 +35,16 @@ export class UserValidators {
             })
         })
         , query('password', 'Password is Required').isAlphanumeric()]
+    }
+
+    static updatePassword() {
+        return[body('password', 'Password is Required').isAlphanumeric(), body('confirm_password', 'Confirm Password is Required').isAlphanumeric(), body('new_password', 'New Password is Required').isAlphanumeric().custom((newPassword, {req}) => {
+            if(newPassword === req.body.confirm_password) {
+                return true;
+            }else {
+                req.errorStatus = 422;
+                throw new Error('Password and Confirm Password Does Not Match');
+            }
+        })]
     }
 }

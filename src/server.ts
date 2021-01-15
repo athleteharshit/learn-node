@@ -21,7 +21,7 @@ export class Server {
 
     connectMongodb() {
         const databaseUrl = getEnvironmentVaribles().db_url;
-        mongoose.connect(databaseUrl, { useNewUrlParser: true, useUnifiedTopology: true })
+        mongoose.connect(databaseUrl, { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false })
             .then(() => {
                 console.log("mongodb is connect")
             })

@@ -9,8 +9,8 @@ export class UserController {
         const username = req.body.username;
         const email = req.body.email;
         const password = req.body.password;
-        
-        const verificationToken  = Utils.generateVerificationToken();
+
+        const verificationToken = Utils.generateVerificationToken();
         try {
             const hash = await Utils.encryptPassword(password);
 
@@ -26,7 +26,7 @@ export class UserController {
 
             let user = await new User(data).save();
             res.send(user);
-            await NodeMailer.sendEmail({to: ['hg94543@gmail.com'], subject: `email testing`, html: `<h1>${verificationToken}</h1>`});
+            await NodeMailer.sendEmail({ to: ['hg94543@gmail.com'], subject: `email testing`, html: `<h1>${verificationToken}</h1>` });
         } catch (err) {
             next(err);
         }
@@ -35,15 +35,15 @@ export class UserController {
 
     static async verify(req, res, next) {
         const verificationToken = req.body.verification_token;
-        const email = req.body.email;
+        const email = req.user.email;
 
         try {
-            const user = await User.findOneAndUpdate({ email: email, verification_token: verificationToken, verification_token_time: { $gt: Date.now() + new Utils().MAX_TOKEN_TIME } }, {verified: true}, {new: true});
+            const user = await User.findOneAndUpdate({ email: email, verification_token: verificationToken, verification_token_time: { $gt: Date.now() + new Utils().MAX_TOKEN_TIME } }, { verified: true }, { new: true });
 
             if (user) {
                 res.send(user);
             } else {
-                throw new Error('Verification Token Is Expired. Please Request For a new One')
+                throw new Error('Verification Token Is Expired. Please Request For a New One')
             }
         } catch (e) {
             next(e);
@@ -52,13 +52,13 @@ export class UserController {
 
 
     static async resendVerificationEmail(req, res, next) {
-        const email = req.query.email;
+        const email = req.user.email;
         const verificationToken = Utils.generateVerificationToken();
-        
-        try {
-            const user = await User.findOneAndUpdate({email: email}, {verification_token: verificationToken, verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME});
 
-            if(user) {
+        try {
+            const user = await User.findOneAndUpdate({ email: email }, { verification_token: verificationToken, verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME });
+
+            if (user) {
                 const mailer = await NodeMailer.sendEmail({
                     to: [user.email],
                     subject: 'Email Verification',
@@ -68,7 +68,7 @@ export class UserController {
                 res.json({
                     success: true
                 })
-            }else {
+            } else {
                 throw new Error('User Does Not Exist')
             }
         } catch (e) {
@@ -80,16 +80,35 @@ export class UserController {
     static async login(req, res, next) {
         const password = req.query.password;
         const user = req.user;
-        
-        try {
-            await Utils.comparePassword({plainPassword: password, encryptedPassword: user.password});
 
-            const token = Jwt.sign({email: user.email, user_id: user._id}, getEnvironmentVaribles().jwt_secret, {expiresIn: '100d'});
+        try {
+            await Utils.comparePassword({ plainPassword: password, encryptedPassword: user.password });
+
+            const token = Jwt.sign({ email: user.email, user_id: user._id }, getEnvironmentVaribles().jwt_secret, { expiresIn: '100d' });
             const data = {
                 user: user,
                 token: token
             }
             res.json(data);
+        } catch (e) {
+            next(e);
+        }
+    }
+
+    static async updatePassword(req, res, next) {
+        const user_id = req.user.user_id;
+        const password = req.body.password;
+        const newPassword = req.body.new_password;
+        // console.log(req.user, req.body)
+
+        try {
+            User.findOne({_id: user_id}).then(async (user) => {
+                await Utils.comparePassword({plainPassword: password, encryptedPassword: user.password});
+
+                const encryptedPassword = await Utils.encryptPassword(newPassword);
+                const newUser = await User.findByIdAndUpdate({_id: user_id}, {password: encryptedPassword}, {new: true});
+                res.send(newUser);
+            })
         } catch (e) {
             next(e);
         }
