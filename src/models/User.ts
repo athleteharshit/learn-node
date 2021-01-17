@@ -10,6 +10,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    profile_pic_url: {
+        type: String,
+        required: true
+    },
     verified: {
         type: Boolean,
         required: true,
@@ -22,6 +26,14 @@ const userSchema = new mongoose.Schema({
     verification_token_time: {
         type: Date,
         required: true
+    },
+    reset_password_token_time: {
+        type: Date,
+        requird: false
+    },
+    reset_password_token: {
+        type: Number,
+        required: false
     },
     username: {
         type: String,

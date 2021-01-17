@@ -1,116 +1,215 @@
 import User from "../models/User";
 import { NodeMailer } from "../utils/NodeMailer";
 import { Utils } from "../utils/Utils";
-import * as Jwt from 'jsonwebtoken';
+import * as Jwt from "jsonwebtoken";
 import { getEnvironmentVaribles } from "../environments/env";
 
 export class UserController {
-    static async signUp(req, res, next) {
-        const username = req.body.username;
-        const email = req.body.email;
-        const password = req.body.password;
+  static async signUp(req, res, next) {
+    const username = req.body.username;
+    const email = req.body.email;
+    const password = req.body.password;
 
-        const verificationToken = Utils.generateVerificationToken();
-        try {
-            const hash = await Utils.encryptPassword(password);
+    const verificationToken = Utils.generateVerificationToken();
+    try {
+      const hash = await Utils.encryptPassword(password);
 
-            const data = {
-                username,
-                email,
-                password: hash,
-                verification_token: verificationToken,
-                verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME,
-                created_at: new Date(),
-                updated_at: new Date()
-            }
+      const data = {
+        username,
+        email,
+        password: hash,
+        verification_token: verificationToken,
+        verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
 
-            let user = await new User(data).save();
-            res.send(user);
-            await NodeMailer.sendEmail({ to: ['hg94543@gmail.com'], subject: `email testing`, html: `<h1>${verificationToken}</h1>` });
-        } catch (err) {
-            next(err);
-        }
+      let user = await new User(data).save();
+      res.send(user);
+      await NodeMailer.sendEmail({
+        to: ["hg94543@gmail.com"],
+        subject: `email testing`,
+        html: `<h1>${verificationToken}</h1>`,
+      });
+    } catch (e) {
+      next(e);
     }
+  }
 
+  static async verify(req, res, next) {
+    const verificationToken = req.body.verification_token;
+    const email = req.user.email;
 
-    static async verify(req, res, next) {
-        const verificationToken = req.body.verification_token;
-        const email = req.user.email;
+    try {
+      const user = await User.findOneAndUpdate(
+        {
+          email: email,
+          verification_token: verificationToken,
+          verification_token_time: {
+            $gt: Date.now() + new Utils().MAX_TOKEN_TIME,
+          },
+        },
+        { verified: true },
+        { new: true }
+      );
 
-        try {
-            const user = await User.findOneAndUpdate({ email: email, verification_token: verificationToken, verification_token_time: { $gt: Date.now() + new Utils().MAX_TOKEN_TIME } }, { verified: true }, { new: true });
-
-            if (user) {
-                res.send(user);
-            } else {
-                throw new Error('Verification Token Is Expired. Please Request For a New One')
-            }
-        } catch (e) {
-            next(e);
-        }
+      if (user) {
+        res.send(user);
+      } else {
+        throw new Error(
+          "Verification Token Is Expired. Please Request For a New One"
+        );
+      }
+    } catch (e) {
+      next(e);
     }
+  }
 
+  static async resendVerificationEmail(req, res, next) {
+    const email = req.user.email;
+    const verificationToken = Utils.generateVerificationToken();
 
-    static async resendVerificationEmail(req, res, next) {
-        const email = req.user.email;
-        const verificationToken = Utils.generateVerificationToken();
-
-        try {
-            const user = await User.findOneAndUpdate({ email: email }, { verification_token: verificationToken, verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME });
-
-            if (user) {
-                const mailer = await NodeMailer.sendEmail({
-                    to: [user.email],
-                    subject: 'Email Verification',
-                    html: `<h1>${verificationToken}</h1>`
-                })
-
-                res.json({
-                    success: true
-                })
-            } else {
-                throw new Error('User Does Not Exist')
-            }
-        } catch (e) {
-            next(e);
+    try {
+      const user = await User.findOneAndUpdate(
+        { email: email },
+        {
+          verification_token: verificationToken,
+          verification_token_time: Date.now() + new Utils().MAX_TOKEN_TIME,
         }
+      );
+
+      if (user) {
+        const mailer = await NodeMailer.sendEmail({
+          to: [user.email],
+          subject: "Email Verification",
+          html: `<h1>${verificationToken}</h1>`,
+        });
+
+        res.json({
+          success: true,
+        });
+      } else {
+        throw new Error("User Does Not Exist");
+      }
+    } catch (e) {
+      next(e);
     }
+  }
 
+  static async login(req, res, next) {
+    const password = req.query.password;
+    const user = req.user;
 
-    static async login(req, res, next) {
-        const password = req.query.password;
-        const user = req.user;
+    try {
+      await Utils.comparePassword({
+        plainPassword: password,
+        encryptedPassword: user.password,
+      });
 
-        try {
-            await Utils.comparePassword({ plainPassword: password, encryptedPassword: user.password });
-
-            const token = Jwt.sign({ email: user.email, user_id: user._id }, getEnvironmentVaribles().jwt_secret, { expiresIn: '100d' });
-            const data = {
-                user: user,
-                token: token
-            }
-            res.json(data);
-        } catch (e) {
-            next(e);
-        }
+      const token = Jwt.sign(
+        { email: user.email, user_id: user._id },
+        getEnvironmentVaribles().jwt_secret,
+        { expiresIn: "100d" }
+      );
+      const data = {
+        user: user,
+        token: token,
+      };
+      res.json(data);
+    } catch (e) {
+      next(e);
     }
+  }
 
-    static async updatePassword(req, res, next) {
-        const user_id = req.user.user_id;
-        const password = req.body.password;
-        const newPassword = req.body.new_password;
-        // console.log(req.user, req.body)
+  static async updatePassword(req, res, next) {
+    const user_id = req.user.user_id;
+    const password = req.body.password;
+    const newPassword = req.body.new_password;
 
-        try {
-            User.findOne({_id: user_id}).then(async (user) => {
-                await Utils.comparePassword({plainPassword: password, encryptedPassword: user.password});
+    try {
+        const user = await User.findOne({ _id: user_id });
+        await Utils.comparePassword({
+          plainPassword: password,
+          encryptedPassword: user.password,
+        });
 
-                const encryptedPassword = await Utils.encryptPassword(newPassword);
-                const newUser = await User.findByIdAndUpdate({_id: user_id}, {password: encryptedPassword}, {new: true});
-                res.send(newUser);
-            })
-        } catch (e) {
-            next(e);
-        }
+        const encryptedPassword = await Utils.encryptPassword(newPassword);
+        const newUser = await User.findByIdAndUpdate(
+          { _id: user_id },
+          { password: encryptedPassword },
+          { new: true }
+        );
+        res.send(newUser);
+    } catch (e) {
+      next(e);
     }
+  }
+
+  static async resetPassword(req, res, next) {
+    const user = req.user;
+    const newPassword = req.body.new_password;
+
+    try {
+      const encryptedPassword = await Utils.encryptPassword(newPassword);
+      const updatedUser = await User.findByIdAndUpdate(
+        { _id: user._id },
+        {
+          updated_at: new Date(),
+          password: encryptedPassword,
+        },
+        { new: true }
+      );
+      res.send(updatedUser);
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  static async sendResetPasswordEmail(req, res, next) {
+    const email = req.query.email;
+    const resetPasswordToken = Utils.generateVerificationToken();
+
+    try {
+      const updatedUser = await User.findOneAndUpdate(
+        { email: email },
+        {
+          updated_at: new Date(),
+          reset_password_token: resetPasswordToken,
+          reset_password_token_time: Date.now() + new Utils().MAX_TOKEN_TIME,
+        },
+        { new: true }
+      );
+      res.send(updatedUser);
+      await NodeMailer.sendEmail({
+        to: [email],
+        subject: "Reset Password Email",
+        html: `<h1>${resetPasswordToken}</h1>`,
+      });
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  static async verifyReserPasswordToken(req, res, next) {
+    res.json({
+      success: true,
+    });
+  }
+
+  static async updateProfilePic(req, res, next) {
+    const userId = req.user.user_id;
+    const fileUrl = "http://localhost:5000/" + req.file.path;
+    // console.log(req.file);
+    try {
+      const user = await User.findOneAndUpdate(
+        { _id: userId },
+        { updated_at: new Date(), profile_pic_url: fileUrl },
+        { new: true }
+      );
+
+      res.send(user);
+    } catch (e) {
+      next(e);
+    }
+  }
 }
