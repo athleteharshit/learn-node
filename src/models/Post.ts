@@ -26,4 +26,8 @@ const postSchema = new mongoose.Schema({
   ],
 });
 
+postSchema.virtual('commentCount').get(function() {
+  return this.comments.length;
+})
+
 export default model("posts", postSchema);

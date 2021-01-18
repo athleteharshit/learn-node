@@ -14,7 +14,25 @@ class PostRouter {
     this.deleteRoutes();
   }
 
-  getRoutes() {}
+  getRoutes() {
+    this.router.get(
+      "/me",
+      GlobalMiddleware.authenticate,
+      PostController.getPostByUser
+    );
+    this.router.get(
+      "/all",
+      GlobalMiddleware.authenticate,
+      PostController.getAllPost
+    );
+    this.router.get(
+      "/:id",
+      GlobalMiddleware.authenticate,
+      PostValidators.getPostById(),
+      GlobalMiddleware.checkError,
+      PostController.getPostById
+    );
+  }
 
   postRoutes() {
     this.router.post(
